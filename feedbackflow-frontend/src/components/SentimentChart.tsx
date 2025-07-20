@@ -34,7 +34,7 @@ export function SentimentChart({ data }: SentimentChartProps) {
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
             }}
             labelFormatter={(value) => `Date: ${new Date(value).toLocaleDateString()}`}
-            formatter={(value: number, name: string, props: any) => {
+            formatter={(value: number, name: string, props: { payload?: { total?: number } }) => {
               const total = props.payload?.total || 1;
               const percentage = ((value / total) * 100).toFixed(1);
               return [

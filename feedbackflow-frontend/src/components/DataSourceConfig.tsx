@@ -9,7 +9,7 @@ interface DataSource {
   type: 'reddit' | 'file' | 'api';
   status: 'active' | 'inactive' | 'error';
   lastSync: string;
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 }
 
 interface DataSourceConfigProps {
@@ -26,9 +26,13 @@ export function DataSourceConfig({
   onUpdateSource 
 }: DataSourceConfigProps) {
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newSource, setNewSource] = useState({
+  const [newSource, setNewSource] = useState<{
+    name: string;
+    type: 'reddit' | 'file' | 'api';
+    config: Record<string, unknown>;
+  }>({
     name: '',
-    type: 'reddit' as const,
+    type: 'reddit',
     config: {}
   });
   const [processing, setProcessing] = useState<string | null>(null);
@@ -172,7 +176,7 @@ export function DataSourceConfig({
               </label>
               <select
                 value={newSource.type}
-                onChange={(e) => setNewSource({ ...newSource, type: e.target.value as any })}
+                onChange={(e) => setNewSource({ ...newSource, type: e.target.value as 'reddit' | 'file' | 'api' })}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="reddit">Reddit</option>

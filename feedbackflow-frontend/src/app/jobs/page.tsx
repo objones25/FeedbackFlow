@@ -33,7 +33,8 @@ export default function JobsPage() {
 
   const fetchJobsStatus = async () => {
     try {
-      const response = await fetch('/api/jobs/status');
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/jobs/status`);
       const data = await response.json();
       
       if (data.success) {
@@ -50,7 +51,8 @@ export default function JobsPage() {
   const handleStartAllJobs = async () => {
     setActionLoading('start-all');
     try {
-      const response = await fetch('/api/jobs/start', { method: 'POST' });
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/jobs/start`, { method: 'POST' });
       const data = await response.json();
       
       if (data.success) {
@@ -66,7 +68,8 @@ export default function JobsPage() {
   const handleStopAllJobs = async () => {
     setActionLoading('stop-all');
     try {
-      const response = await fetch('/api/jobs/stop', { method: 'POST' });
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/jobs/stop`, { method: 'POST' });
       const data = await response.json();
       
       if (data.success) {
@@ -82,9 +85,10 @@ export default function JobsPage() {
   const handleRestartJobs = async () => {
     setActionLoading('restart');
     try {
-      await fetch('/api/jobs/stop', { method: 'POST' });
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      await fetch(`${apiUrl}/api/jobs/stop`, { method: 'POST' });
       await new Promise(resolve => setTimeout(resolve, 1000));
-      await fetch('/api/jobs/start', { method: 'POST' });
+      await fetch(`${apiUrl}/api/jobs/start`, { method: 'POST' });
       await fetchJobsStatus();
     } catch (error) {
       console.error('Failed to restart jobs:', error);

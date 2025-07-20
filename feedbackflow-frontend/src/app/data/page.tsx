@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Search, Filter, Eye, Users, MessageSquare, TrendingUp, Calendar, ExternalLink } from 'lucide-react';
+import { Search, Users, MessageSquare, Calendar } from 'lucide-react';
 
 interface FeedbackGroup {
   id: number;
@@ -10,15 +10,6 @@ interface FeedbackGroup {
   trendScore: number;
   createdAt: string;
   updatedAt: string;
-}
-
-interface FeedbackEntry {
-  id: number;
-  sourceId: number;
-  rawText: string;
-  author: string;
-  timestamp: string;
-  metadata: any;
 }
 
 interface Sentence {
@@ -36,12 +27,12 @@ export default function DataPage() {
   const [groupSentences, setGroupSentences] = useState<Sentence[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sentimentFilter, setSentimentFilter] = useState('all');
   const [sortBy, setSortBy] = useState('trendScore');
 
   const fetchGroups = async () => {
     try {
-      const response = await fetch('/api/feedback/groups');
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/feedback/groups`);
       const data = await response.json();
       
       if (data.success) {
@@ -59,11 +50,12 @@ export default function DataPage() {
       setSelectedGroup(group);
       
       // Fetch real sentences from the API
-      const response = await fetch(`/api/groups/${group.id}/sentences`);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/groups/${group.id}/sentences`);
       const data = await response.json();
       
       if (data.success && data.data.sentences) {
-        const sentences: Sentence[] = data.data.sentences.map((sentence: any) => ({
+        const sentences: Sentence[] = data.data.sentences.map((sentence: Sentence) => ({
           id: sentence.id,
           entryId: sentence.entryId,
           text: sentence.text,

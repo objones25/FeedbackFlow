@@ -51,35 +51,44 @@ cd ../feedbackflow-frontend
 npm install
 ```
 
-## 4. Start the Services
+## 4. Start the Application
 
-Use Docker Compose to start the PostgreSQL database and Redis instance:
-
-```bash
-docker-compose up -d
-```
-
-## 5. Run the Application
-
-### a. Start the Backend Server
-
-In the `feedbackflow-backend` directory:
+Use Docker Compose to build and start all the services, including the database, Redis, backend, and frontend:
 
 ```bash
-npm run dev
-```
-
-The backend server will be running on `http://localhost:3001`.
-
-### b. Start the Frontend Development Server
-
-In the `feedbackflow-frontend` directory:
-
-```bash
-npm run dev
+docker compose up -d --build
 ```
 
 The frontend application will be accessible at `http://localhost:3000`.
+The backend server will be running on `http://localhost:3001`.
+
+## 5. Troubleshooting
+
+### Frontend Connection Issues
+
+If the frontend is unable to connect to the backend, you may see errors in the browser console such as `Failed to fetch`, `ECONNREFUSED`, or `ERR_NAME_NOT_RESOLVED`.
+
+1.  **Check the Frontend `.env` file**: Ensure that `feedbackflow-frontend/.env` exists and that `NEXT_PUBLIC_API_URL` is set to `http://localhost:3001`.
+
+2.  **Check the Backend `.env` file**: Ensure that `feedbackflow-backend/.env` exists and that `DATABASE_HOST` is set to `postgres` and `REDIS_HOST` is set to `redis`.
+
+3.  **Check Docker Networking**: Make sure that the frontend and backend containers are on the same Docker network.
+
+### Docker Volume Mount Error on macOS with External Drives
+
+If you encounter an error similar to `mkdir /host_mnt/Volumes/External_Hard_Drive: file exists`, it's likely due to an issue with Docker Desktop's volume mounting on external drives.
+
+The solution is to remove the volume mounts for the source code from the `docker-compose.yml` file. This will cause the application to run from the code copied into the image during the build process, rather than from the local file system.
+
+**Note:** With this change, any modifications to the source code will not be reflected in the running containers until the images are rebuilt using `docker compose up -d --build`.
+
+### Docker Credential Helper Error
+
+If you see an error like `docker-credential-osxkeychain not found`, you may need to create a symbolic link to the executable.
+
+### Database Initialization Issues
+
+If the database does not initialize correctly, you can manually copy the schema file to the `postgres` container and execute it.
 
 ## 6. Project Structure
 

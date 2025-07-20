@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, Trash2, Settings as SettingsIcon, Database, Activity, Bell } from 'lucide-react';
+import { Plus, Settings as SettingsIcon, Database, Activity, Bell } from 'lucide-react';
 
 interface CustomJob {
   subreddit: string;
@@ -39,7 +39,7 @@ export default function SettingsPage() {
       } else {
         setMessage({ type: 'error', text: data.error?.message || 'Failed to create custom job' });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: 'error', text: 'Failed to create custom job' });
     } finally {
       setLoading(false);
@@ -103,7 +103,7 @@ export default function SettingsPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       required
                     />
-                    <p className="text-xs text-gray-500 mt-1">Enter subreddit name without 'r/'</p>
+                    <p className="text-xs text-gray-500 mt-1">Enter subreddit name without &#39;r/&#39;</p>
                   </div>
 
                   <div>

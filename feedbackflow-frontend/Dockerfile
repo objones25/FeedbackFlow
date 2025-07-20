@@ -16,7 +16,7 @@ RUN apk add --no-cache \
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --force
 
 # Copy source code
 COPY . .
@@ -33,11 +33,11 @@ USER feedbackflow
 RUN npm run build
 
 # Expose port
-EXPOSE 3001
+EXPOSE 3000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node healthcheck.js
+# Next.js doesn't have a simple healthcheck endpoint by default.
+# This can be added later if needed.
 
 # Start the application
 CMD ["npm", "start"]

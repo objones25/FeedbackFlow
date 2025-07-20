@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { SentimentChart } from '@/components/SentimentChart';
 import { FeedbackGroups } from '@/components/FeedbackGroups';
 import { MetricsCards } from '@/components/MetricsCards';
 import { AlertPanel } from '@/components/AlertPanel';
-import { RefreshCw, Calendar, Filter } from 'lucide-react';
+import { RefreshCw, Calendar } from 'lucide-react';
 
 interface DashboardData {
   metrics: {
@@ -54,12 +54,15 @@ export default function Dashboard() {
   const [timeframe, setTimeframe] = useState('7d');
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchDashboardData = async (selectedTimeframe: string = timeframe) => {
+  const fetchDashboardData = useCallback(async (selectedTimeframe: string = timeframe) => {
     try {
       setRefreshing(true);
-      const response = await fetch(`/api/feedback/dashboard?timeframe=${selectedTimeframe}`);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/feedback/dashboard?timeframe=${selectedTimeframe}`);
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Backend error:", errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
@@ -151,11 +154,11 @@ export default function Dashboard() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [timeframe]);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [fetchDashboardData]);
 
   const handleTimeframeChange = (newTimeframe: string) => {
     setTimeframe(newTimeframe);
