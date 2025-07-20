@@ -1,0 +1,39 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Next.js
+/.next/
+/out/
+
+# Production
+/build
+
+# Miscellaneous
+.DS_Store
+*.pem
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Backend
+feedbackflow-backend/node_modules/
+feedbackflow-backend/dist/
+feedbackflow-backend/uploads/
+
+# Frontend
+feedbackflow-frontend/node_modules/
+feedbackflow-frontend/.next/
+feedbackflow-frontend/out/
+feedbackflow-frontend/.env.local
+feedbackflow-frontend/.env.development.local
+feedbackflow-frontend/.env.test.local
+feedbackflow-frontend/.env.production.local

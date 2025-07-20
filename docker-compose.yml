@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: feedbackflow-postgres
+    environment:
+      POSTGRES_DB: feedbackflow
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./feedbackflow-backend/database/init:/docker-entrypoint-initdb.d
+    networks:
+      - feedbackflow-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d feedbackflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: feedbackflow-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - feedbackflow-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  # Backend API (for development)
+  backend:
+    build:
+      context: ./feedbackflow-backend
+      dockerfile: Dockerfile
+    container_name: feedbackflow-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=feedbackflow
+      - DATABASE_USER=admin
+      - DATABASE_PASSWORD=password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./feedbackflow-backend:/app
+      - /app/node_modules
+    networks:
+      - feedbackflow-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: npm run dev
+
+  # Frontend (for development)
+  frontend:
+    build:
+      context: ./feedbackflow-frontend
+      dockerfile: Dockerfile
+    container_name: feedbackflow-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+    volumes:
+      - ./feedbackflow-frontend:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - feedbackflow-network
+    depends_on:
+      - backend
+    command: npm run dev
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  feedbackflow-network:
+    driver: bridge
