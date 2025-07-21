@@ -31,7 +31,7 @@ interface RedditComment {
 export class RedditService {
   private readonly baseUrl = 'https://www.reddit.com';
   private readonly userAgent: string;
-  private readonly rateLimitDelay = 1000; // 1 second between requests
+  private readonly rateLimitDelay = 2000; // 2 seconds between requests for free tier
   private lastRequestTime = 0;
 
   constructor() {
@@ -110,13 +110,21 @@ export class RedditService {
 
   public async fetchSubredditPosts(
     subreddit: string, 
-    limit: number = 25
+    limit: number = 50,
+    sort: 'hot' | 'top' | 'new' | 'best' = 'hot',
+    timeframe: 'hour' | 'day' | 'week' | 'month' | 'year' | 'all' = 'day'
   ): Promise<RedditPost[]> {
     this.validateSubreddit(subreddit);
     this.validateLimit(limit);
 
     try {
-      const url = `${this.baseUrl}/r/${subreddit}/new.json?limit=${limit}`;
+      let url = `${this.baseUrl}/r/${subreddit}/${sort}.json?limit=${limit}`;
+      
+      // Add timeframe for 'top' sort
+      if (sort === 'top') {
+        url += `&t=${timeframe}`;
+      }
+      
       const response = await this.makeRequest<RedditApiResponse>(url);
 
       return response.data.data.children.map(child => 
@@ -129,6 +137,61 @@ export class RedditService {
       
       // Log error but return empty array for resilience
       console.error('Reddit API error:', error);
+      return [];
+    }
+  }
+
+  public async fetchSubredditPostsMultiSort(
+    subreddit: string,
+    limit: number = 50
+  ): Promise<RedditPost[]> {
+    this.validateSubreddit(subreddit);
+    this.validateLimit(limit);
+
+    try {
+      // Fetch from multiple sorts to get diverse content
+      const sorts: Array<{ sort: 'hot' | 'top' | 'new' | 'best', timeframe?: 'day' | 'week' }> = [
+        { sort: 'hot' },
+        { sort: 'top', timeframe: 'day' },
+        { sort: 'best' },
+        { sort: 'new' }
+      ];
+
+      const postsPerSort = Math.ceil(limit / sorts.length);
+      const allPosts: RedditPost[] = [];
+      const seenPermalinks = new Set<string>();
+
+      for (const { sort, timeframe } of sorts) {
+        try {
+          const posts = await this.fetchSubredditPosts(subreddit, postsPerSort, sort, timeframe);
+          
+          // Deduplicate by permalink
+          for (const post of posts) {
+            if (!seenPermalinks.has(post.permalink)) {
+              seenPermalinks.add(post.permalink);
+              allPosts.push(post);
+            }
+          }
+          
+          // Add delay between requests to respect rate limits (more conservative for free tier)
+          await new Promise(resolve => setTimeout(resolve, 2500));
+        } catch (error) {
+          console.warn(`Failed to fetch ${sort} posts from r/${subreddit}:`, error);
+          // Continue with other sorts
+        }
+      }
+
+      // Sort by score descending and limit to requested amount
+      return allPosts
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
+        
+    } catch (error) {
+      if (error instanceof ValidationError || error instanceof ExternalApiError) {
+        throw error;
+      }
+      
+      console.error('Reddit multi-sort API error:', error);
       return [];
     }
   }

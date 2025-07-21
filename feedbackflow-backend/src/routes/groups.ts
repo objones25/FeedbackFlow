@@ -1,9 +1,11 @@
 import express from 'express';
 import { DatabaseService } from '../services/database';
+import { ClusteringService } from '../services/clusteringService';
 import { ValidationError } from '../utils/errors';
 
 const router = express.Router();
 const db = DatabaseService.getInstance();
+const clusteringService = new ClusteringService();
 
 /**
  * @route GET /api/groups/:groupId/sentences
@@ -126,6 +128,18 @@ router.get('/:groupId/sentences', async (req, res) => {
         permalink: row.metadata.permalink
       } : null
     }));
+
+    // Calculate priority based on actual post data
+    const sentencesWithEmbeddings = sentences.map(sentence => ({
+      id: sentence.id,
+      text: sentence.text,
+      embedding: [], // Empty embedding for priority calculation only
+      structuredAnalysis: sentence.structuredAnalysis
+    }));
+
+    const groupPriority = clusteringService.calculateClusterPriority(sentencesWithEmbeddings);
+    const priorityLabel = clusteringService.getPriorityLabel(groupPriority);
+    const priorityColor = clusteringService.getPriorityColor(groupPriority);
     
     return res.json({
       success: true,
@@ -135,6 +149,9 @@ router.get('/:groupId/sentences', async (req, res) => {
           name: group.name,
           description: group.description,
           trendScore: group.trend_score,
+          priority: groupPriority,
+          priorityLabel: priorityLabel,
+          priorityColor: priorityColor,
           createdAt: group.created_at,
           updatedAt: group.updated_at
         },

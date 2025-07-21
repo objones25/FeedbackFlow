@@ -229,6 +229,77 @@ export class ClusteringService {
     return parts.join('. ') || 'Mixed feedback cluster';
   }
 
+  public calculateClusterPriority(sentences: readonly SentenceWithEmbedding[]): number {
+    if (sentences.length === 0) {
+      return 0;
+    }
+
+    // Filter sentences with structured analysis
+    const sentencesWithAnalysis = sentences.filter(s => s.structuredAnalysis);
+    
+    if (sentencesWithAnalysis.length === 0) {
+      return 0.5; // Default medium priority for sentences without analysis
+    }
+
+    let totalPriority = 0;
+
+    sentencesWithAnalysis.forEach(sentence => {
+      const analysis = sentence.structuredAnalysis!;
+      let priority = 0;
+
+      // Urgency weight (40%)
+      const urgencyScores = {
+        'critical': 1.0,
+        'high': 0.8,
+        'medium': 0.5,
+        'low': 0.2
+      };
+      priority += (urgencyScores[analysis.urgency] || 0.2) * 0.4;
+
+      // Category weight (30%)
+      const categoryScores = {
+        'bug_report': 1.0,
+        'complaint': 0.9,
+        'feature_request': 0.7,
+        'question': 0.5,
+        'discussion': 0.4,
+        'praise': 0.2
+      };
+      priority += (categoryScores[analysis.category] || 0.4) * 0.3;
+
+      // Sentiment weight (20%) - negative sentiment increases priority
+      const sentimentScores = {
+        'negative': 1.0,
+        'neutral': 0.5,
+        'positive': 0.2
+      };
+      priority += (sentimentScores[analysis.sentiment.primary] || 0.5) * 0.2;
+
+      // Action items weight (10%) - more action items = higher priority
+      const actionItemsScore = Math.min(1.0, analysis.actionItems.length * 0.2);
+      priority += actionItemsScore * 0.1;
+
+      totalPriority += priority;
+    });
+
+    // Return average priority of all sentences in the cluster
+    return totalPriority / sentencesWithAnalysis.length;
+  }
+
+  public getPriorityLabel(priority: number): string {
+    if (priority >= 0.8) return 'HIGH';
+    if (priority >= 0.6) return 'MEDIUM';
+    if (priority >= 0.4) return 'LOW-MED';
+    return 'LOW';
+  }
+
+  public getPriorityColor(priority: number): string {
+    if (priority >= 0.8) return '#ef4444'; // red-500
+    if (priority >= 0.6) return '#f97316'; // orange-500
+    if (priority >= 0.4) return '#eab308'; // yellow-500
+    return '#22c55e'; // green-500
+  }
+
   private calculateClusterConfidence(
     sentences: readonly SentenceWithEmbedding[],
     centroid: readonly number[]
