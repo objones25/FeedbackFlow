@@ -19,6 +19,7 @@ export interface FeedbackEntry {
   readonly author: string;
   readonly timestamp: Date;
   readonly metadata: Record<string, unknown>;
+  readonly externalId?: string; 
   readonly createdAt?: Date;
   readonly processingStatus?: 'pending' | 'processing' | 'completed' | 'failed';
 }

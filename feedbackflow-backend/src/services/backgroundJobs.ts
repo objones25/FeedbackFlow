@@ -1,4 +1,4 @@
-import { FeedbackService } from '@/services/feedbackService';
+import { FeedbackService } from "@/services/feedbackService";
 
 interface JobConfig {
   readonly id: string;
@@ -24,52 +24,55 @@ interface JobStatus {
 export class BackgroundJobService {
   private readonly feedbackService: FeedbackService;
   private readonly jobs: Map<string, NodeJS.Timeout> = new Map();
-  private readonly jobStats: Map<string, {
-    totalRuns: number;
-    successfulRuns: number;
-    failedRuns: number;
-    lastRun?: Date;
-  }> = new Map();
+  private readonly jobStats: Map<
+    string,
+    {
+      totalRuns: number;
+      successfulRuns: number;
+      failedRuns: number;
+      lastRun?: Date;
+    }
+  > = new Map();
 
   private readonly defaultJobs: readonly JobConfig[] = [
     {
-      id: 'webdev-collector',
-      subreddit: 'webdev',
+      id: "webdev-collector",
+      subreddit: "webdev",
       intervalMinutes: 15,
       limit: 8,
       enabled: true,
     },
     {
-      id: 'reactjs-collector',
-      subreddit: 'reactjs',
+      id: "reactjs-collector",
+      subreddit: "reactjs",
       intervalMinutes: 20,
       limit: 6,
       enabled: true,
     },
     {
-      id: 'javascript-collector',
-      subreddit: 'javascript',
+      id: "javascript-collector",
+      subreddit: "javascript",
       intervalMinutes: 25,
       limit: 10,
       enabled: true,
     },
     {
-      id: 'programming-collector',
-      subreddit: 'programming',
+      id: "programming-collector",
+      subreddit: "programming",
       intervalMinutes: 30,
       limit: 12,
       enabled: true,
     },
     {
-      id: 'frontend-collector',
-      subreddit: 'Frontend',
+      id: "frontend-collector",
+      subreddit: "Frontend",
       intervalMinutes: 35,
       limit: 6,
       enabled: true,
     },
     {
-      id: 'nodejs-collector',
-      subreddit: 'node',
+      id: "nodejs-collector",
+      subreddit: "node",
       intervalMinutes: 40,
       limit: 8,
       enabled: true,
@@ -78,9 +81,9 @@ export class BackgroundJobService {
 
   constructor() {
     this.feedbackService = new FeedbackService();
-    
+
     // Initialize job stats
-    this.defaultJobs.forEach(job => {
+    this.defaultJobs.forEach((job) => {
       this.jobStats.set(job.id, {
         totalRuns: 0,
         successfulRuns: 0,
@@ -90,9 +93,9 @@ export class BackgroundJobService {
   }
 
   public startAllJobs(): void {
-    console.log('🚀 Starting background data collection jobs...');
-    
-    this.defaultJobs.forEach(jobConfig => {
+    console.log("🚀 Starting background data collection jobs...");
+
+    this.defaultJobs.forEach((jobConfig) => {
       if (jobConfig.enabled) {
         this.startJob(jobConfig);
       }
@@ -103,15 +106,15 @@ export class BackgroundJobService {
   }
 
   public stopAllJobs(): void {
-    console.log('🛑 Stopping all background jobs...');
-    
+    console.log("🛑 Stopping all background jobs...");
+
     this.jobs.forEach((timeout, jobId) => {
       clearInterval(timeout);
       console.log(`   Stopped job: ${jobId}`);
     });
-    
+
     this.jobs.clear();
-    console.log('✅ All background jobs stopped');
+    console.log("✅ All background jobs stopped");
   }
 
   private startJob(jobConfig: JobConfig): void {
@@ -120,16 +123,18 @@ export class BackgroundJobService {
     setTimeout(() => {
       this.executeJob(jobConfig);
     }, startupDelay);
-    
+
     // Schedule recurring execution
     const intervalMs = jobConfig.intervalMinutes * 60 * 1000;
     const timeout = setInterval(() => {
       this.executeJob(jobConfig);
     }, intervalMs);
-    
+
     this.jobs.set(jobConfig.id, timeout);
-    
-    console.log(`   📅 Scheduled job: ${jobConfig.id} (every ${jobConfig.intervalMinutes} minutes)`);
+
+    console.log(
+      `   📅 Scheduled job: ${jobConfig.id} (every ${jobConfig.intervalMinutes} minutes)`
+    );
   }
 
   private async executeJob(jobConfig: JobConfig): Promise<void> {
@@ -137,25 +142,28 @@ export class BackgroundJobService {
     if (!stats) return;
 
     try {
-      console.log(`🔄 Executing job: ${jobConfig.id} (r/${jobConfig.subreddit}, limit: ${jobConfig.limit})`);
-      
+      console.log(
+        `🔄 Executing job: ${jobConfig.id} (r/${jobConfig.subreddit}, limit: ${jobConfig.limit})`
+      );
+
       const startTime = Date.now();
-      
-      const result = await this.feedbackService.processFeedbackFromReddit(jobConfig.subreddit, {
-        batchSize: jobConfig.limit,
-        enableClustering: true,
-        sentimentThreshold: 0.1, // Process most sentiment results
-        clusteringThreshold: 0.3,
-        maxSentences: 100,
-      });
-      
+
+      const result =
+        await this.feedbackService.processRedditWithStructuredAnalysis(
+          jobConfig.subreddit,
+          {
+            batchSize: jobConfig.limit,
+            useGeminiAnalysis: true,
+          }
+        );
+
       const duration = Date.now() - startTime;
-      
+
       // Update stats
       stats.totalRuns++;
       stats.successfulRuns++;
       stats.lastRun = new Date();
-      
+
       console.log(`✅ Job completed: ${jobConfig.id}`, {
         processedEntries: result.processedCount,
         analyzedSentences: result.sentencesCount,
@@ -164,33 +172,34 @@ export class BackgroundJobService {
         totalRuns: stats.totalRuns,
         successRate: `${((stats.successfulRuns / stats.totalRuns) * 100).toFixed(1)}%`,
       });
-      
     } catch (error) {
       // Update stats
       stats.totalRuns++;
       stats.failedRuns++;
       stats.lastRun = new Date();
-      
+
       console.error(`❌ Job failed: ${jobConfig.id}`, {
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
         totalRuns: stats.totalRuns,
         failureRate: `${((stats.failedRuns / stats.totalRuns) * 100).toFixed(1)}%`,
       });
-      
+
       // Continue with other jobs even if one fails
     }
   }
 
   public getJobStatus(): JobStatus[] {
-    return this.defaultJobs.map(jobConfig => {
+    return this.defaultJobs.map((jobConfig) => {
       const stats = this.jobStats.get(jobConfig.id);
       const isRunning = this.jobs.has(jobConfig.id);
-      
+
       let nextRun: Date | undefined;
       if (isRunning && stats?.lastRun) {
-        nextRun = new Date(stats.lastRun.getTime() + (jobConfig.intervalMinutes * 60 * 1000));
+        nextRun = new Date(
+          stats.lastRun.getTime() + jobConfig.intervalMinutes * 60 * 1000
+        );
       }
-      
+
       return {
         id: jobConfig.id,
         subreddit: jobConfig.subreddit,
@@ -206,7 +215,11 @@ export class BackgroundJobService {
     });
   }
 
-  public addCustomJob(subreddit: string, intervalMinutes: number, limit: number): string {
+  public addCustomJob(
+    subreddit: string,
+    intervalMinutes: number,
+    limit: number
+  ): string {
     const jobId = `custom-${subreddit}-${Date.now()}`;
     const jobConfig: JobConfig = {
       id: jobId,
@@ -215,23 +228,25 @@ export class BackgroundJobService {
       limit,
       enabled: true,
     };
-    
+
     // Initialize stats
     this.jobStats.set(jobId, {
       totalRuns: 0,
       successfulRuns: 0,
       failedRuns: 0,
     });
-    
+
     this.startJob(jobConfig);
-    console.log(`✅ Added custom job: ${jobId} (r/${subreddit}, every ${intervalMinutes} minutes)`);
-    
+    console.log(
+      `✅ Added custom job: ${jobId} (r/${subreddit}, every ${intervalMinutes} minutes)`
+    );
+
     return jobId;
   }
 
   public removeJob(jobId: string): boolean {
     const timeout = this.jobs.get(jobId);
-    
+
     if (timeout) {
       clearInterval(timeout);
       this.jobs.delete(jobId);
@@ -239,7 +254,7 @@ export class BackgroundJobService {
       console.log(`✅ Removed job: ${jobId}`);
       return true;
     }
-    
+
     return false;
   }
 
@@ -248,7 +263,7 @@ export class BackgroundJobService {
   }
 
   public resumeJob(jobId: string): boolean {
-    const jobConfig = this.defaultJobs.find(job => job.id === jobId);
+    const jobConfig = this.defaultJobs.find((job) => job.id === jobId);
     if (jobConfig && !this.jobs.has(jobId)) {
       this.startJob(jobConfig);
       return true;
@@ -257,12 +272,18 @@ export class BackgroundJobService {
   }
 
   private logJobSchedule(): void {
-    console.log('\n📋 Background Job Schedule:');
-    console.log('┌─────────────────────────┬─────────────┬─────────┬──────────┐');
-    console.log('│ Job ID                  │ Subreddit   │ Limit   │ Interval │');
-    console.log('├─────────────────────────┼─────────────┼─────────┼──────────┤');
-    
-    this.defaultJobs.forEach(job => {
+    console.log("\n📋 Background Job Schedule:");
+    console.log(
+      "┌─────────────────────────┬─────────────┬─────────┬──────────┐"
+    );
+    console.log(
+      "│ Job ID                  │ Subreddit   │ Limit   │ Interval │"
+    );
+    console.log(
+      "├─────────────────────────┼─────────────┼─────────┼──────────┤"
+    );
+
+    this.defaultJobs.forEach((job) => {
       if (job.enabled) {
         const jobId = job.id.padEnd(23);
         const subreddit = `r/${job.subreddit}`.padEnd(11);
@@ -271,8 +292,10 @@ export class BackgroundJobService {
         console.log(`│ ${jobId} │ ${subreddit} │ ${limit} │ ${interval} │`);
       }
     });
-    
-    console.log('└─────────────────────────┴─────────────┴─────────┴──────────┘\n');
+
+    console.log(
+      "└─────────────────────────┴─────────────┴─────────┴──────────┘\n"
+    );
   }
 
   public getSystemStats(): {
@@ -286,17 +309,29 @@ export class BackgroundJobService {
   } {
     const allStats = Array.from(this.jobStats.values());
     const totalRuns = allStats.reduce((sum, stats) => sum + stats.totalRuns, 0);
-    const successfulRuns = allStats.reduce((sum, stats) => sum + stats.successfulRuns, 0);
-    const failedRuns = allStats.reduce((sum, stats) => sum + stats.failedRuns, 0);
-    
+    const successfulRuns = allStats.reduce(
+      (sum, stats) => sum + stats.successfulRuns,
+      0
+    );
+    const failedRuns = allStats.reduce(
+      (sum, stats) => sum + stats.failedRuns,
+      0
+    );
+
     return {
       totalJobs: this.defaultJobs.length,
       runningJobs: this.jobs.size,
       totalRuns,
       successfulRuns,
       failedRuns,
-      successRate: totalRuns > 0 ? `${((successfulRuns / totalRuns) * 100).toFixed(1)}%` : '0%',
-      uptime: process.uptime() > 0 ? `${Math.floor(process.uptime() / 60)}m ${Math.floor(process.uptime() % 60)}s` : '0s',
+      successRate:
+        totalRuns > 0
+          ? `${((successfulRuns / totalRuns) * 100).toFixed(1)}%`
+          : "0%",
+      uptime:
+        process.uptime() > 0
+          ? `${Math.floor(process.uptime() / 60)}m ${Math.floor(process.uptime() % 60)}s`
+          : "0s",
     };
   }
 }
@@ -305,12 +340,12 @@ export class BackgroundJobService {
 export const backgroundJobService = new BackgroundJobService();
 
 // Graceful shutdown handling
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, stopping background jobs...');
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received, stopping background jobs...");
   backgroundJobService.stopAllJobs();
 });
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received, stopping background jobs...');
+process.on("SIGINT", () => {
+  console.log("SIGINT received, stopping background jobs...");
   backgroundJobService.stopAllJobs();
 });
