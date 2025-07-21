@@ -53,6 +53,7 @@ router.get('/:groupId/sentences', async (req, res) => {
     }
     
     const sentenceIds = group.sentence_ids || [];
+    console.log('sentenceIds', sentenceIds);
     
     if (sentenceIds.length === 0) {
       return res.json({

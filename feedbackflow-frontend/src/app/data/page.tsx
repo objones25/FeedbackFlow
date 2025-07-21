@@ -53,8 +53,9 @@ export default function DataPage() {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       const response = await fetch(`${apiUrl}/api/groups/${group.id}/sentences`);
       const data = await response.json();
+      console.log('group details', data);
       
-      if (data.success && data.data.sentences) {
+      if (data.success && data.data && data.data.sentences) {
         const sentences: Sentence[] = data.data.sentences.map((sentence: Sentence) => ({
           id: sentence.id,
           entryId: sentence.entryId,
