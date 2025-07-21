@@ -149,10 +149,18 @@ export default function DataPage() {
     }
   };
 
-  const getTrendScoreColor = (score: number) => {
-    if (score >= 0.8) return 'text-green-600';
-    if (score >= 0.6) return 'text-yellow-600';
-    return 'text-red-600';
+  const getPriorityColor = (score: number) => {
+    if (score >= 0.8) return 'text-red-600'; // High priority = red
+    if (score >= 0.6) return 'text-orange-600'; // Medium priority = orange
+    if (score >= 0.4) return 'text-yellow-600'; // Low-medium priority = yellow
+    return 'text-green-600'; // Low priority = green
+  };
+
+  const getPriorityLabel = (score: number) => {
+    if (score >= 0.8) return 'HIGH';
+    if (score >= 0.6) return 'MEDIUM';
+    if (score >= 0.4) return 'LOW-MED';
+    return 'LOW';
   };
 
   const getCategoryColor = (category: string) => {
@@ -253,8 +261,8 @@ export default function DataPage() {
                       <h3 className="font-medium text-gray-900 text-sm truncate flex-1">
                         {group.name}
                       </h3>
-                      <span className={`text-xs font-medium ${getTrendScoreColor(group.trendScore)}`}>
-                        {(group.trendScore * 100).toFixed(1)}%
+                      <span className={`text-xs font-medium ${getPriorityColor(group.trendScore)}`}>
+                        {getPriorityLabel(group.trendScore)}
                       </span>
                     </div>
                     
@@ -292,10 +300,10 @@ export default function DataPage() {
                       <p className="text-gray-600 mb-4">{selectedGroup.description}</p>
                     </div>
                     <div className="text-right">
-                      <div className={`text-2xl font-bold ${getTrendScoreColor(selectedGroup.trendScore)}`}>
-                        {(selectedGroup.trendScore * 100).toFixed(1)}%
+                      <div className={`text-2xl font-bold ${getPriorityColor(selectedGroup.trendScore)}`}>
+                        {getPriorityLabel(selectedGroup.trendScore)}
                       </div>
-                      <div className="text-sm text-gray-500">Trend Score</div>
+                      <div className="text-sm text-gray-500">Priority</div>
                     </div>
                   </div>
 

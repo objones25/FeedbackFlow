@@ -859,20 +859,18 @@ export class FeedbackService {
       for (const [category, analyses] of categoryGroups) {
         if (analyses.length > 0) {
           const themes = [...new Set(analyses.flatMap((a) => a.themes))];
-          const avgUrgency = this.calculateAverageUrgency(
-            analyses.map((a) => a.urgency)
-          );
+          const priorityScore = this.calculatePriorityScore(analyses);
 
           feedbackGroups.push({
             name: `${category.replace("_", " ").toUpperCase()} Issues`,
             description: `${analyses.length} feedback items categorized as ${category}. Common themes: ${themes.slice(0, 3).join(", ")}`,
             sentenceIds: sentenceIds.slice(0, analyses.length), // Map to actual sentence IDs
-            trendScore: avgUrgency,
+            trendScore: priorityScore,
             metadata: {
               category,
               themes,
               count: analyses.length,
-              urgencyLevel: avgUrgency,
+              priorityLevel: priorityScore,
               actionItems: [...new Set(analyses.flatMap((a) => a.actionItems))],
             },
           });
@@ -910,15 +908,45 @@ export class FeedbackService {
     }
   }
 
-  private calculateAverageUrgency(
-    urgencies: Array<"low" | "medium" | "high" | "critical">
+  private calculatePriorityScore(
+    analyses: StructuredFeedback[]
   ): number {
-    const urgencyValues = { low: 0.25, medium: 0.5, high: 0.75, critical: 1.0 };
-    const total = urgencies.reduce(
-      (sum, urgency) => sum + urgencyValues[urgency],
-      0
-    );
-    return total / urgencies.length;
+    // Calculate priority score based on urgency, sentiment, and category
+    let totalScore = 0;
+    
+    for (const analysis of analyses) {
+      let score = 0;
+      
+      // Urgency weight (40%)
+      const urgencyValues = { low: 0.2, medium: 0.5, high: 0.8, critical: 1.0 };
+      score += urgencyValues[analysis.urgency] * 0.4;
+      
+      // Category weight (30%)
+      const categoryValues = { 
+        bug_report: 0.9, 
+        complaint: 0.8, 
+        feature_request: 0.6, 
+        question: 0.4, 
+        discussion: 0.3, 
+        praise: 0.2 
+      };
+      score += (categoryValues[analysis.category] || 0.5) * 0.3;
+      
+      // Sentiment weight (20%) - negative sentiment increases priority
+      if (analysis.sentiment.primary === 'negative') {
+        score += analysis.sentiment.confidence * 0.2;
+      } else if (analysis.sentiment.primary === 'neutral') {
+        score += 0.1;
+      }
+      // Positive sentiment doesn't add to priority score
+      
+      // Action items weight (10%) - more action items = higher priority
+      score += Math.min(analysis.actionItems.length / 5, 1) * 0.1;
+      
+      totalScore += score;
+    }
+    
+    return Math.min(totalScore / analyses.length, 1.0);
   }
 
   public async healthCheck(): Promise<{

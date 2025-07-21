@@ -1,10 +1,26 @@
 import { ClusterResult } from '@/types';
 import { ValidationError } from '@/utils/errors';
 
+interface StructuredAnalysis {
+  sentiment: {
+    primary: 'positive' | 'negative' | 'neutral';
+    confidence: number;
+    emotions: string[];
+  };
+  category: 'bug_report' | 'feature_request' | 'complaint' | 'praise' | 'question' | 'discussion';
+  themes: string[];
+  urgency: 'low' | 'medium' | 'high' | 'critical';
+  summary: string;
+  suggestedResponse?: string;
+  actionItems: string[];
+  keyPhrases: string[];
+}
+
 interface SentenceWithEmbedding {
   readonly id: number;
   readonly text: string;
   readonly embedding: readonly number[];
+  readonly structuredAnalysis?: StructuredAnalysis;
 }
 
 interface Cluster {
@@ -119,8 +135,14 @@ export class ClusteringService {
       return 'Empty cluster';
     }
 
-    // Simple theme generation based on common words
-    // In a real implementation, this could use more sophisticated NLP
+    // Enhanced theme generation using structured analysis
+    const sentencesWithAnalysis = sentences.filter(s => s.structuredAnalysis);
+    
+    if (sentencesWithAnalysis.length > 0) {
+      return this.generateEnhancedTheme(sentencesWithAnalysis);
+    }
+
+    // Fallback to simple theme generation for sentences without structured analysis
     const allWords = sentences
       .flatMap(s => s.text.toLowerCase().split(/\s+/))
       .filter(word => word.length > 3) // Filter out short words
@@ -137,6 +159,74 @@ export class ClusteringService {
       .map(([word]) => word);
 
     return sortedWords.length > 0 ? sortedWords.join(', ') : 'General feedback';
+  }
+
+  private generateEnhancedTheme(sentences: readonly SentenceWithEmbedding[]): string {
+    // Analyze categories
+    const categories = new Map<string, number>();
+    const themes = new Map<string, number>();
+    const urgencyLevels = new Map<string, number>();
+    const sentiments = new Map<string, number>();
+
+    sentences.forEach(sentence => {
+      const analysis = sentence.structuredAnalysis!;
+      
+      // Count categories
+      categories.set(analysis.category, (categories.get(analysis.category) || 0) + 1);
+      
+      // Count themes from structured analysis
+      analysis.themes.forEach(theme => {
+        themes.set(theme.toLowerCase(), (themes.get(theme.toLowerCase()) || 0) + 1);
+      });
+      
+      // Count urgency levels
+      urgencyLevels.set(analysis.urgency, (urgencyLevels.get(analysis.urgency) || 0) + 1);
+      
+      // Count sentiments
+      sentiments.set(analysis.sentiment.primary, (sentiments.get(analysis.sentiment.primary) || 0) + 1);
+    });
+
+    // Get the most common category
+    const topCategory = Array.from(categories.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0];
+
+    // Get top themes
+    const topThemes = Array.from(themes.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([theme]) => theme);
+
+    // Get dominant sentiment and urgency
+    const topSentiment = Array.from(sentiments.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0];
+    
+    const topUrgency = Array.from(urgencyLevels.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0];
+
+    // Generate descriptive theme
+    const parts: string[] = [];
+    
+    // Add count and category
+    if (topCategory) {
+      const categoryLabel = topCategory.replace('_', ' ').toUpperCase();
+      parts.push(`${sentences.length} feedback items categorized as ${categoryLabel.toLowerCase()}`);
+    }
+
+    // Add themes if available
+    if (topThemes.length > 0) {
+      parts.push(`Common themes: ${topThemes.join(', ')}`);
+    }
+
+    // Add sentiment/urgency context for important cases
+    if (topUrgency === 'high' || topUrgency === 'critical') {
+      parts.push(`${topUrgency} urgency items`);
+    } else if (topSentiment === 'negative' && sentiments.get('negative')! / sentences.length > 0.6) {
+      parts.push('predominantly negative sentiment');
+    } else if (topSentiment === 'positive' && sentiments.get('positive')! / sentences.length > 0.6) {
+      parts.push('predominantly positive sentiment');
+    }
+
+    return parts.join('. ') || 'Mixed feedback cluster';
   }
 
   private calculateClusterConfidence(
@@ -183,7 +273,7 @@ export class ClusteringService {
 
       // Find the best matching cluster
       for (const cluster of clusters) {
-        const similarity = this.cosineSimilarity(sentence.embedding, cluster.centroid);
+        const similarity = this.calculateEnhancedSimilarity(sentence, cluster, sentenceList);
         
         if (similarity > threshold && similarity > bestSimilarity) {
           bestSimilarity = similarity;
@@ -260,6 +350,75 @@ export class ClusteringService {
       })),
       outliers: [...outliers], // Make readonly
     };
+  }
+
+  private calculateEnhancedSimilarity(
+    sentence: SentenceWithEmbedding,
+    cluster: Cluster,
+    allSentences: readonly SentenceWithEmbedding[]
+  ): number {
+    // Base embedding similarity
+    const embeddingSimilarity = this.cosineSimilarity(sentence.embedding, cluster.centroid);
+    
+    // If no structured analysis available, use embedding similarity only
+    if (!sentence.structuredAnalysis) {
+      return embeddingSimilarity;
+    }
+
+    // Get cluster sentences with structured analysis
+    const clusterSentences = allSentences.filter(s => 
+      cluster.sentenceIds.includes(s.id) && s.structuredAnalysis
+    );
+
+    if (clusterSentences.length === 0) {
+      return embeddingSimilarity;
+    }
+
+    // Calculate structured analysis similarity
+    const structuredSimilarity = this.calculateStructuredSimilarity(
+      sentence.structuredAnalysis,
+      clusterSentences.map(s => s.structuredAnalysis!)
+    );
+
+    // Weighted combination: 70% embedding, 30% structured analysis
+    return (embeddingSimilarity * 0.7) + (structuredSimilarity * 0.3);
+  }
+
+  private calculateStructuredSimilarity(
+    analysis: StructuredAnalysis,
+    clusterAnalyses: StructuredAnalysis[]
+  ): number {
+    let totalSimilarity = 0;
+    let weights = 0;
+
+    // Category similarity (high weight)
+    const categoryMatches = clusterAnalyses.filter(a => a.category === analysis.category).length;
+    const categoryScore = categoryMatches / clusterAnalyses.length;
+    totalSimilarity += categoryScore * 0.4;
+    weights += 0.4;
+
+    // Theme overlap (high weight)
+    const allClusterThemes = new Set(clusterAnalyses.flatMap(a => a.themes.map(t => t.toLowerCase())));
+    const analysisThemes = new Set(analysis.themes.map(t => t.toLowerCase()));
+    const themeOverlap = [...analysisThemes].filter(theme => allClusterThemes.has(theme)).length;
+    const maxThemes = Math.max(analysisThemes.size, allClusterThemes.size);
+    const themeScore = maxThemes > 0 ? themeOverlap / maxThemes : 0;
+    totalSimilarity += themeScore * 0.3;
+    weights += 0.3;
+
+    // Sentiment similarity (medium weight)
+    const sentimentMatches = clusterAnalyses.filter(a => a.sentiment.primary === analysis.sentiment.primary).length;
+    const sentimentScore = sentimentMatches / clusterAnalyses.length;
+    totalSimilarity += sentimentScore * 0.2;
+    weights += 0.2;
+
+    // Urgency similarity (low weight)
+    const urgencyMatches = clusterAnalyses.filter(a => a.urgency === analysis.urgency).length;
+    const urgencyScore = urgencyMatches / clusterAnalyses.length;
+    totalSimilarity += urgencyScore * 0.1;
+    weights += 0.1;
+
+    return weights > 0 ? totalSimilarity / weights : 0;
   }
 
   public async findSimilarSentences(
