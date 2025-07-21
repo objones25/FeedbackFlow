@@ -73,7 +73,7 @@ router.get('/:groupId/sentences', async (req, res) => {
       });
     }
     
-    // Get sentences for this group
+    // Get sentences for this group with enhanced Reddit metadata
     const sentencesQuery = `
       SELECT 
         s.id,
@@ -85,9 +85,14 @@ router.get('/:groupId/sentences', async (req, res) => {
         s.created_at,
         fe.author,
         fe.timestamp as entry_timestamp,
-        fe.metadata
+        fe.metadata,
+        fe.raw_text,
+        fs.name as source_name,
+        fs.type as source_type,
+        fs.metadata as source_metadata
       FROM sentences s
       LEFT JOIN feedback_entries fe ON s.entry_id = fe.id
+      LEFT JOIN feedback_sources fs ON fe.source_id = fs.id
       WHERE s.id = ANY($1)
       ORDER BY s.created_at DESC
     `;
@@ -104,7 +109,19 @@ router.get('/:groupId/sentences', async (req, res) => {
       createdAt: row.created_at,
       author: row.author,
       entryTimestamp: row.entry_timestamp,
-      metadata: row.metadata
+      metadata: row.metadata,
+      rawText: row.raw_text,
+      sourceName: row.source_name,
+      sourceType: row.source_type,
+      sourceMetadata: row.source_metadata,
+      // Extract Reddit-specific metadata if available
+      redditData: row.metadata ? {
+        title: row.metadata.title,
+        subreddit: row.metadata.subreddit,
+        score: row.metadata.score,
+        numComments: row.metadata.numComments,
+        permalink: row.metadata.permalink
+      } : null
     }));
     
     return res.json({

@@ -83,11 +83,11 @@ router.get('/trends', async (req: Request, res: Response) => {
 // GET /api/feedback/groups - Get feedback groups
 router.get('/groups', async (req: Request, res: Response) => {
   try {
-    const { limit = '20' } = req.query;
+    const { limit = '100' } = req.query;
     
     const limitNum = parseInt(limit as string, 10);
-    if (isNaN(limitNum)) {
-      throw new ValidationError('Limit must be a valid number');
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 1000) {
+      throw new ValidationError('Limit must be a valid number between 1 and 1000');
     }
 
     const groups = await feedbackService.getFeedbackGroups(limitNum);

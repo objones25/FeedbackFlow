@@ -19,6 +19,19 @@ interface Sentence {
   sentimentScore: number;
   sentimentLabel: string;
   categories: string[];
+  author?: string;
+  entryTimestamp?: string;
+  metadata?: Record<string, unknown>;
+  rawText?: string;
+  sourceName?: string;
+  sourceType?: string;
+  redditData?: {
+    title?: string;
+    subreddit?: string;
+    score?: number;
+    numComments?: number;
+    permalink?: string;
+  };
 }
 
 export default function DataPage() {
@@ -56,13 +69,26 @@ export default function DataPage() {
       console.log('group details', data);
       
       if (data.success && data.data && data.data.sentences) {
-        const sentences: Sentence[] = data.data.sentences.map((sentence: Sentence) => ({
-          id: sentence.id,
-          entryId: sentence.entryId,
-          text: sentence.text,
-          sentimentScore: sentence.sentimentScore,
-          sentimentLabel: sentence.sentimentLabel,
-          categories: sentence.categories || []
+        const sentences: Sentence[] = data.data.sentences.map((sentence: Record<string, unknown>) => ({
+          id: sentence.id as number,
+          entryId: sentence.entryId as number,
+          text: sentence.text as string,
+          sentimentScore: sentence.sentimentScore as number,
+          sentimentLabel: sentence.sentimentLabel as string,
+          categories: (sentence.categories as string[]) || [],
+          author: sentence.author as string | undefined,
+          entryTimestamp: sentence.entryTimestamp as string | undefined,
+          metadata: sentence.metadata as Record<string, unknown> | undefined,
+          rawText: sentence.rawText as string | undefined,
+          sourceName: sentence.sourceName as string | undefined,
+          sourceType: sentence.sourceType as string | undefined,
+          redditData: sentence.redditData as {
+            title?: string;
+            subreddit?: string;
+            score?: number;
+            numComments?: number;
+            permalink?: string;
+          } | undefined
         }));
         setGroupSentences(sentences);
       } else {
@@ -134,6 +160,14 @@ export default function DataPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Data Explorer</h1>
           <p className="text-gray-600">Explore feedback clusters, sentiment analysis, and detailed insights</p>
+          <div className="mt-4 flex items-center gap-4 text-sm text-gray-600">
+            <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">
+              {filteredGroups.length} groups found
+            </span>
+            <span>
+              Total items: {filteredGroups.reduce((sum, group) => sum + group.sentenceIds.length, 0)}
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -167,7 +201,7 @@ export default function DataPage() {
               </div>
 
               {/* Groups List */}
-              <div className="max-h-96 overflow-y-auto">
+              <div className="max-h-[600px] overflow-y-auto">
                 {filteredGroups.map((group) => (
                   <div
                     key={group.id}
@@ -258,6 +292,41 @@ export default function DataPage() {
                   <div className="space-y-4">
                     {groupSentences.map((sentence) => (
                       <div key={sentence.id} className="border border-gray-200 rounded-lg p-4">
+                        {/* Reddit Post Header (if available) */}
+                        {(sentence.sourceType === 'reddit' || sentence.redditData) && (
+                          <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                            <div className="flex items-start justify-between mb-2">
+                              <h4 className="font-medium text-gray-900 text-sm">
+                                Reddit Post {sentence.rawText ? `- ${sentence.rawText.split('\n')[0]}` : ''}
+                              </h4>
+                              {sentence.metadata && 'url' in sentence.metadata && sentence.metadata.url ? (
+                                <a
+                                  href={`https://reddit.com${sentence.metadata.url as string}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-600 hover:text-blue-800 underline"
+                                >
+                                  View on Reddit
+                                </a>
+                              ) : null}
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-gray-600">
+                              {(sentence.redditData?.subreddit || (sentence.metadata && 'subreddit' in sentence.metadata && String(sentence.metadata.subreddit))) && (
+                                <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                                  r/{sentence.redditData?.subreddit || (sentence.metadata && 'subreddit' in sentence.metadata ? String(sentence.metadata.subreddit) : '')}
+                                </span>
+                              )}
+                              {sentence.author && (
+                                <span>by u/{sentence.author}</span>
+                              )}
+                              {(sentence.redditData?.score !== undefined || (sentence.metadata && 'score' in sentence.metadata && sentence.metadata.score !== undefined)) && (
+                                <span>{sentence.redditData?.score || (sentence.metadata && 'score' in sentence.metadata ? Number(sentence.metadata.score) : 0)} points</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Sentence Header */}
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-gray-500">
@@ -266,16 +335,45 @@ export default function DataPage() {
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getSentimentColor(sentence.sentimentLabel)}`}>
                               {sentence.sentimentLabel}
                             </span>
+                            {sentence.sourceType && (
+                              <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
+                                {sentence.sourceType}
+                              </span>
+                            )}
                           </div>
                           <div className="text-sm text-gray-500">
                             Score: {sentence.sentimentScore.toFixed(3)}
                           </div>
                         </div>
                         
+                        {/* Sentence Text */}
                         <p className="text-gray-900 mb-3">{sentence.text}</p>
                         
+                        {/* Raw Text (Full Reddit Post Content) */}
+                        {sentence.rawText && sentence.rawText !== sentence.text && (
+                          <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                            <h5 className="text-sm font-medium text-gray-700 mb-2">Full Reddit Post:</h5>
+                            <div className="text-sm text-gray-600 whitespace-pre-wrap max-h-40 overflow-y-auto">
+                              {sentence.rawText}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Author and Timestamp (if not Reddit post) */}
+                        {sentence.author && !sentence.redditData?.title && (
+                          <div className="text-xs text-gray-500 mb-2">
+                            by {sentence.author}
+                            {sentence.entryTimestamp && (
+                              <span className="ml-2">
+                                • {new Date(sentence.entryTimestamp).toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Categories */}
                         {sentence.categories.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap gap-1 mb-2">
                             {sentence.categories.map((category) => (
                               <span
                                 key={category}
@@ -284,6 +382,18 @@ export default function DataPage() {
                                 {category}
                               </span>
                             ))}
+                          </div>
+                        )}
+
+                        {/* Source Information */}
+                        {sentence.sourceName && (
+                          <div className="text-xs text-gray-400 border-t pt-2 mt-2">
+                            Source: {sentence.sourceName}
+                            {sentence.entryTimestamp && (
+                              <span className="ml-2">
+                                • {new Date(sentence.entryTimestamp).toLocaleDateString()}
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
