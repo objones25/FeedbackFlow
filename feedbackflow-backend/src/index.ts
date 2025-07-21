@@ -6,6 +6,7 @@ import processRoutes from '@/routes/process';
 import jobsRoutes from '@/routes/jobs';
 import groupsRoutes from '@/routes/groups';
 import { ValidationError, ExternalApiError, DatabaseError } from '@/utils/errors';
+import { backgroundJobService } from '@/services/backgroundJobs';
 
 const app = express();
 
@@ -146,6 +147,9 @@ app.listen(PORT, HOST, () => {
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Health check: http://${HOST}:${PORT}/health`);
   console.log(`📖 API docs: http://${HOST}:${PORT}/`);
+  
+  // ✅ Start background jobs
+  backgroundJobService.startAllJobs();
 });
 
 export default app;

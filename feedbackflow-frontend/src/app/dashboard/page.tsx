@@ -78,78 +78,8 @@ export default function Dashboard() {
       console.error('Dashboard fetch error:', err);
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
       
-      // Set mock data for development
-      setDashboardData({
-        metrics: {
-          totalSources: 5,
-          totalEntries: 1250,
-          totalSentences: 4800,
-          totalGroups: 12,
-          sentimentDistribution: {
-            positive: 2880,
-            negative: 960,
-            neutral: 960
-          }
-        },
-        trends: [
-          { date: '2024-01-15', positive: 45, negative: 15, neutral: 20, total: 80 },
-          { date: '2024-01-16', positive: 52, negative: 12, neutral: 18, total: 82 },
-          { date: '2024-01-17', positive: 48, negative: 18, neutral: 22, total: 88 },
-          { date: '2024-01-18', positive: 55, negative: 10, neutral: 25, total: 90 },
-          { date: '2024-01-19', positive: 60, negative: 8, neutral: 27, total: 95 },
-          { date: '2024-01-20', positive: 58, negative: 14, neutral: 23, total: 95 },
-          { date: '2024-01-21', positive: 62, negative: 11, neutral: 25, total: 98 }
-        ],
-        groups: [
-          {
-            id: 1,
-            name: 'UI/UX Issues',
-            description: 'User interface and experience related feedback',
-            sentenceIds: [1, 2, 3, 4, 5, 6, 7, 8],
-            trendScore: -0.15,
-            createdAt: '2024-01-15T10:00:00Z',
-            updatedAt: '2024-01-21T15:30:00Z'
-          },
-          {
-            id: 2,
-            name: 'Performance Concerns',
-            description: 'Application speed and performance feedback',
-            sentenceIds: [9, 10, 11, 12, 13],
-            trendScore: -0.08,
-            createdAt: '2024-01-16T14:20:00Z',
-            updatedAt: '2024-01-21T12:15:00Z'
-          },
-          {
-            id: 3,
-            name: 'Feature Requests',
-            description: 'New feature suggestions and requests',
-            sentenceIds: [14, 15, 16, 17, 18, 19, 20, 21, 22],
-            trendScore: 0.22,
-            createdAt: '2024-01-17T09:45:00Z',
-            updatedAt: '2024-01-21T16:00:00Z'
-          }
-        ],
-        alerts: [
-          {
-            id: '1',
-            type: 'warning',
-            title: 'Sentiment Decline Detected',
-            message: 'Negative sentiment has increased by 15% in the last 24 hours',
-            timestamp: '2024-01-21T14:30:00Z',
-            severity: 'medium'
-          },
-          {
-            id: '2',
-            type: 'info',
-            title: 'New Feedback Source Added',
-            message: 'Reddit r/webdev has been successfully connected',
-            timestamp: '2024-01-21T10:15:00Z',
-            severity: 'low'
-          }
-        ],
-        timeframe: selectedTimeframe,
-        lastUpdated: new Date().toISOString()
-      });
+      // ❌ Remove extensive mock data - it hides real connectivity issues
+      setDashboardData(null);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -281,7 +211,7 @@ export default function Dashboard() {
           {/* Charts and Alerts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {dashboardData && <SentimentChart data={dashboardData.trends} />}
-            {dashboardData && <AlertPanel alerts={dashboardData.alerts} />}
+            {dashboardData && <AlertPanel alerts={dashboardData.alerts || []} />}
           </div>
 
           {/* Feedback Groups */}

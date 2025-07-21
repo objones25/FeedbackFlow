@@ -72,7 +72,7 @@ export function MetricsCards({ data }: MetricsCardsProps) {
         const IconComponent = card.icon;
         return (
           <div
-            key={index}
+            key={`metric-${card.title}-${index}`}
             className={`${card.bgColor} p-6 rounded-lg shadow-lg border border-gray-200 transition-all duration-200 hover:shadow-xl hover:scale-105`}
           >
             <div className="flex items-center justify-between">

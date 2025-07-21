@@ -15,7 +15,17 @@ interface AlertPanelProps {
   alerts: Alert[];
 }
 
-export function AlertPanel({ alerts }: AlertPanelProps) {
+export function AlertPanel({ alerts = [] }: AlertPanelProps) {
+  // Ensure alerts is always an array and filter out any invalid items
+  const validAlerts = Array.isArray(alerts) ? alerts.filter(alert => 
+    alert && 
+    typeof alert === 'object' && 
+    alert.id && 
+    alert.title && 
+    alert.message && 
+    alert.timestamp
+  ) : [];
+
   const getAlertIcon = (type: Alert['type']) => {
     switch (type) {
       case 'error':
@@ -80,7 +90,7 @@ export function AlertPanel({ alerts }: AlertPanelProps) {
     );
   };
 
-  if (alerts.length === 0) {
+  if (validAlerts.length === 0) {
     return (
       <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
         <h3 className="text-lg font-semibold mb-4 text-gray-800">System Alerts</h3>
@@ -99,11 +109,11 @@ export function AlertPanel({ alerts }: AlertPanelProps) {
     <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-semibold text-gray-800">System Alerts</h3>
-        <span className="text-sm text-gray-500">{alerts.length} active</span>
+        <span className="text-sm text-gray-500">{validAlerts.length} active</span>
       </div>
       
       <div className="space-y-4 max-h-80 overflow-y-auto">
-        {alerts.map((alert) => (
+        {validAlerts.map((alert) => (
           <div
             key={alert.id}
             className={`${getAlertStyles(alert.type, alert.severity)} transition-all duration-200 hover:shadow-md`}
@@ -118,8 +128,12 @@ export function AlertPanel({ alerts }: AlertPanelProps) {
                   <h4 className="text-sm font-medium text-gray-900 truncate">
                     {alert.title}
                   </h4>
-                  <div className="flex items-center space-x-2 ml-2">
-                    {getSeverityBadge(alert.severity)}
+                  <div className="flex items-center ml-2">
+                    {alert.severity && (
+                      <div className="mr-2">
+                        {getSeverityBadge(alert.severity)}
+                      </div>
+                    )}
                     <div className="flex items-center text-xs text-gray-500">
                       <Clock className="h-3 w-3 mr-1" />
                       {getTimeAgo(alert.timestamp)}
@@ -136,7 +150,7 @@ export function AlertPanel({ alerts }: AlertPanelProps) {
         ))}
       </div>
       
-      {alerts.length > 5 && (
+      {validAlerts.length > 5 && (
         <div className="mt-4 pt-4 border-t border-gray-200">
           <button className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors duration-150">
             View all alerts →

@@ -276,9 +276,9 @@ export default function DataPage() {
                         
                         {sentence.categories.length > 0 && (
                           <div className="flex flex-wrap gap-1">
-                            {sentence.categories.map((category, index) => (
+                            {sentence.categories.map((category) => (
                               <span
-                                key={index}
+                                key={category}
                                 className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
                               >
                                 {category}
