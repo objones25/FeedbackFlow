@@ -98,6 +98,7 @@ export default function DataPage() {
           rawText: sentence.rawText as string | undefined,
           sourceName: sentence.sourceName as string | undefined,
           sourceType: sentence.sourceType as string | undefined,
+          structuredAnalysis: sentence.structuredAnalysis as StructuredFeedback | undefined,
           redditData: sentence.redditData as {
             title?: string;
             subreddit?: string;

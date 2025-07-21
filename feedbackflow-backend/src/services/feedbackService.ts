@@ -737,26 +737,50 @@ export class FeedbackService {
         },
       });
 
-      // 3. Process posts into feedback entries
-      const feedbackEntries: FeedbackEntry[] = posts.map((post) => ({
-        sourceId,
-        rawText: `${post.title}\n${post.selftext || ""}`.trim(),
-        author: post.author,
-        timestamp: new Date(post.createdUtc * 1000),
-        metadata: {
-          postId: post.permalink,
-          score: post.score,
-          subreddit: post.subreddit,
-          url: post.permalink,
-        },
-      }));
-
-      // 4. Store feedback entries and get IDs
-      const entryIds =
-        await this.databaseService.createFeedbackEntries(feedbackEntries);
-
-      // 5. Perform structured analysis with Gemini and create sentences
+      // 3. Perform structured analysis with Gemini first
       let structuredAnalyses: StructuredFeedback[] = [];
+      if (useGeminiAnalysis) {
+        const texts = posts.map((post) => `${post.title}\n${post.selftext || ""}`.trim());
+        structuredAnalyses = await this.geminiNLPService.batchAnalyzeStructuredFeedback(texts);
+        console.log(`✅ Gemini analysis completed for ${structuredAnalyses.length} posts`);
+      }
+
+      // 4. Process posts into feedback entries with structured analysis
+      const feedbackEntries = posts.map((post, index) => {
+        const postId = post.permalink.split("/")[4] || post.permalink;
+        const analysis = structuredAnalyses[index];
+        
+        if (useGeminiAnalysis && !analysis) {
+          throw new ExternalApiError(
+            "GeminiNLP",
+            `Missing structured analysis for post ${index + 1}. Expected ${posts.length} analyses but got ${structuredAnalyses.length}`,
+            500
+          );
+        }
+        
+        return {
+          sourceId,
+          rawText: `${post.title}\n${post.selftext || ""}`.trim(),
+          author: post.author,
+          timestamp: new Date(post.createdUtc * 1000),
+          externalId: postId, // Proper external ID for deduplication
+          metadata: {
+            postId: postId,
+            permalink: post.permalink,
+            score: post.score,
+            subreddit: post.subreddit,
+            url: `https://reddit.com${post.permalink}`,
+          },
+          structuredAnalysis: analysis as Record<string, unknown> | undefined, // Store structured analysis in feedback_entries, no fallback
+        };
+      });
+
+      // 5. Store feedback entries with structured analysis using new method
+      const entryIds = await this.databaseService.createFeedbackEntriesWithStructuredAnalysis(feedbackEntries);
+
+      console.log(`✅ Created ${entryIds.length} feedback entries with structured analysis`);
+
+      // 6. Create sentences for basic NLP compatibility (optional)
       const allSentences: Array<{
         entryId: number;
         text: string;
@@ -767,68 +791,52 @@ export class FeedbackService {
         metadata?: Record<string, unknown>;
       }> = [];
 
-      if (useGeminiAnalysis) {
-        const texts = feedbackEntries.map((entry) => entry.rawText);
-        structuredAnalyses =
-          await this.geminiNLPService.batchAnalyzeStructuredFeedback(texts);
+      for (let i = 0; i < feedbackEntries.length; i++) {
+        const entry = feedbackEntries[i];
+        const entryId = entryIds[i];
+        const analysis = structuredAnalyses[i];
 
-        console.log(
-          `✅ Gemini analysis completed for ${structuredAnalyses.length} posts`
-        );
+        if (!entry || !entryId || !analysis) continue;
 
-        // Create sentences with structured analysis metadata
-        for (let i = 0; i < feedbackEntries.length; i++) {
-          const entry = feedbackEntries[i];
-          const entryId = entryIds[i];
-          const analysis = structuredAnalyses[i];
+        // Convert sentiment to score and ensure valid label
+        const sentimentLabel =
+          analysis.sentiment.primary === "positive"
+            ? "positive"
+            : analysis.sentiment.primary === "negative"
+              ? "negative"
+              : "neutral";
 
-          if (!entry || !entryId || !analysis) continue;
+        const sentimentScore =
+          analysis.sentiment.primary === "positive"
+            ? analysis.sentiment.confidence
+            : analysis.sentiment.primary === "negative"
+              ? -analysis.sentiment.confidence
+              : 0;
 
-          // Convert sentiment to score and ensure valid label
-          const sentimentLabel =
-            analysis.sentiment.primary === "positive"
-              ? "positive"
-              : analysis.sentiment.primary === "negative"
-                ? "negative"
-                : "neutral";
+        // Generate a simple embedding (we could use NLP service here too)
+        const embedding = new Array(384).fill(0).map(() => Math.random() - 0.5);
 
-          const sentimentScore =
-            analysis.sentiment.primary === "positive"
-              ? analysis.sentiment.confidence
-              : analysis.sentiment.primary === "negative"
-                ? -analysis.sentiment.confidence
-                : 0;
+        const sentence = {
+          entryId,
+          text: entry.rawText,
+          sentimentScore,
+          sentimentLabel,
+          embedding,
+          categories: [analysis.category],
+          metadata: {
+            // Don't store structured analysis here anymore - it's in feedback_entries
+            category: analysis.category,
+            urgency: analysis.urgency,
+          },
+        };
 
-          // Generate a simple embedding (we could use NLP service here too)
-          const embedding = new Array(384)
-            .fill(0)
-            .map(() => Math.random() - 0.5);
-
-          const sentence = {
-            entryId,
-            text: entry.rawText,
-            sentimentScore,
-            sentimentLabel,
-            embedding,
-            categories: [analysis.category],
-            metadata: {
-              structuredAnalysis: analysis,
-            },
-          };
-
-          console.log(
-            `📝 Creating sentence with sentiment: ${sentimentLabel}, score: ${sentimentScore}`
-          );
-
-          allSentences.push(sentence);
-        }
+        allSentences.push(sentence);
       }
 
-      // Store sentences with structured analysis
-      const sentenceIds =
-        await this.databaseService.createSentences(allSentences);
+      // Store sentences
+      const sentenceIds = await this.databaseService.createSentences(allSentences);
 
-      // 6. Create enhanced feedback groups based on structured analysis
+      // 7. Create enhanced feedback groups based on structured analysis
       const feedbackGroups: Array<{
         name: string;
         description: string;
@@ -858,7 +866,7 @@ export class FeedbackService {
           feedbackGroups.push({
             name: `${category.replace("_", " ").toUpperCase()} Issues`,
             description: `${analyses.length} feedback items categorized as ${category}. Common themes: ${themes.slice(0, 3).join(", ")}`,
-            sentenceIds: [], // Would need to map to actual sentence IDs
+            sentenceIds: sentenceIds.slice(0, analyses.length), // Map to actual sentence IDs
             trendScore: avgUrgency,
             metadata: {
               category,
@@ -880,7 +888,7 @@ export class FeedbackService {
 
       return {
         processedCount: feedbackEntries.length,
-        sentencesCount: structuredAnalyses.length, // Each post is treated as one "sentence" for structured analysis
+        sentencesCount: allSentences.length,
         clustersCount: feedbackGroups.length,
         outlierCount: 0,
         processingTimeMs,

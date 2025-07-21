@@ -73,7 +73,7 @@ router.get('/:groupId/sentences', async (req, res) => {
       });
     }
     
-    // Get sentences for this group with enhanced Reddit metadata
+    // Get sentences for this group with enhanced Reddit metadata and structured analysis
     const sentencesQuery = `
       SELECT 
         s.id,
@@ -87,6 +87,7 @@ router.get('/:groupId/sentences', async (req, res) => {
         fe.timestamp as entry_timestamp,
         fe.metadata,
         fe.raw_text,
+        fe.structured_analysis,
         fs.name as source_name,
         fs.type as source_type,
         fs.metadata as source_metadata
@@ -114,6 +115,8 @@ router.get('/:groupId/sentences', async (req, res) => {
       sourceName: row.source_name,
       sourceType: row.source_type,
       sourceMetadata: row.source_metadata,
+      // Include structured analysis from feedback_entries
+      structuredAnalysis: row.structured_analysis,
       // Extract Reddit-specific metadata if available
       redditData: row.metadata ? {
         title: row.metadata.title,

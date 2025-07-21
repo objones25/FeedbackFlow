@@ -263,6 +263,44 @@ export class DatabaseService {
     return ids;
   }
 
+  public async createFeedbackEntriesWithStructuredAnalysis(
+    entries: Array<{
+      sourceId: number;
+      rawText: string;
+      author: string;
+      timestamp: Date;
+      metadata: Record<string, unknown>;
+      externalId?: string;
+      structuredAnalysis?: Record<string, unknown> | undefined;
+    }>
+  ): Promise<number[]> {
+    const ids: number[] = [];
+
+    for (const entry of entries) {
+      try {
+        const result = await this.insert("feedback_entries", {
+          source_id: entry.sourceId,
+          raw_text: entry.rawText,
+          author: entry.author,
+          timestamp: entry.timestamp,
+          metadata: JSON.stringify(entry.metadata),
+          external_id: entry.externalId,
+          structured_analysis: JSON.stringify(entry.structuredAnalysis || {}),
+        });
+        ids.push(result.id as number);
+      } catch (error) {
+        // Handle duplicate key errors gracefully
+        if (error instanceof Error && error.message.includes('unique_external_id_source')) {
+          console.log(`Skipping duplicate entry with external_id: ${entry.externalId}`);
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    return ids;
+  }
+
   public async createSentences(
     sentences: Array<{
       entryId: number;
@@ -284,7 +322,7 @@ export class DatabaseService {
         sentiment_label: sentence.sentimentLabel,
         categories: sentence.categories, // PostgreSQL array, not JSON
         embedding: sentence.embedding, // PostgreSQL array, not JSON
-        metadata: JSON.stringify(sentence.metadata || {}), // Store structured analysis here
+        // Note: metadata is not stored in sentences table - structured analysis is in feedback_entries
       });
       ids.push(result.id as number);
     }
