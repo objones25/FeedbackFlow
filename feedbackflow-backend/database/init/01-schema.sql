@@ -8,7 +8,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE feedback_sources (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    type VARCHAR(50) NOT NULL CHECK (type IN ('reddit', 'news', 'file_upload', 'api', 'manual')),
+    type VARCHAR(50) NOT NULL CHECK (type IN ('reddit', 'reddit_enhanced', 'news', 'file_upload', 'api', 'manual')),
     metadata JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -75,11 +75,18 @@ CREATE TABLE alerts (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Add deduplication constraints for Reddit posts
+ALTER TABLE feedback_entries ADD CONSTRAINT unique_reddit_post 
+    UNIQUE (source_id, (metadata->>'postId')) DEFERRABLE INITIALLY DEFERRED;
+
 -- Create indexes for better performance
 CREATE INDEX idx_feedback_entries_source_id ON feedback_entries(source_id);
 CREATE INDEX idx_feedback_entries_processing_status ON feedback_entries(processing_status);
 CREATE INDEX idx_feedback_entries_created_at ON feedback_entries(created_at);
 CREATE INDEX idx_feedback_entries_timestamp ON feedback_entries(timestamp);
+
+-- Index for deduplication performance
+CREATE INDEX idx_feedback_entries_reddit_dedup ON feedback_entries (source_id, (metadata->>'postId'));
 
 CREATE INDEX idx_sentences_entry_id ON sentences(entry_id);
 CREATE INDEX idx_sentences_sentiment_label ON sentences(sentiment_label);

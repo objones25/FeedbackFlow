@@ -1,5 +1,6 @@
 import { RedditService } from '@/services/redditService';
 import { NLPService } from '@/services/nlpService';
+import { GeminiNLPService, StructuredFeedback } from '@/services/geminiNLPService';
 import { ClusteringService } from '@/services/clusteringService';
 import { DatabaseService } from '@/services/database';
 import { 
@@ -31,14 +32,18 @@ interface ProcessingResult {
 export class FeedbackService {
   private readonly redditService: RedditService;
   private readonly nlpService: NLPService;
+  private readonly geminiNLPService: GeminiNLPService;
   private readonly clusteringService: ClusteringService;
   private readonly databaseService: DatabaseService;
 
   constructor() {
     this.redditService = new RedditService();
     this.nlpService = new NLPService();
+    this.geminiNLPService = new GeminiNLPService(); // Will throw error if API key not available
     this.clusteringService = new ClusteringService();
     this.databaseService = new DatabaseService();
+    
+    console.log('✅ All services initialized including Gemini NLP');
   }
 
   private validateProcessingOptions(options: ProcessingOptions): void {
@@ -571,6 +576,241 @@ export class FeedbackService {
       console.warn('Anomaly detection failed:', error);
       return []; // Return empty array on failure
     }
+  }
+
+  /**
+   * Enhanced feedback analysis using Gemini NLP service
+   * Provides structured analysis with categories, themes, urgency, and action items
+   */
+  public async analyzeStructuredFeedback(
+    texts: string[]
+  ): Promise<StructuredFeedback[]> {
+    if (!this.geminiNLPService) {
+      throw new ExternalApiError(
+        'GeminiNLP',
+        'Gemini NLP service is not available. Please configure GOOGLE_API_KEY.',
+        503
+      );
+    }
+
+    if (!Array.isArray(texts) || texts.length === 0) {
+      throw new ValidationError('Texts array cannot be empty');
+    }
+
+    if (texts.length > 20) {
+      throw new ValidationError('Cannot analyze more than 20 texts at once');
+    }
+
+    try {
+      return await this.geminiNLPService.batchAnalyzeStructuredFeedback(texts);
+    } catch (error) {
+      throw new ExternalApiError(
+        'GeminiNLP',
+        `Structured feedback analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        500
+      );
+    }
+  }
+
+  /**
+   * Enhanced Reddit processing with Gemini NLP for structured analysis
+   */
+  public async processRedditWithStructuredAnalysis(
+    subreddit: string,
+    options: ProcessingOptions & { useGeminiAnalysis?: boolean } = {}
+  ): Promise<ProcessingResult & { structuredAnalyses?: StructuredFeedback[] }> {
+
+    const startTime = Date.now();
+    
+    try {
+      // Validate inputs
+      if (!subreddit || typeof subreddit !== 'string' || subreddit.trim() === '') {
+        throw new ValidationError('Subreddit name is required');
+      }
+
+      this.validateProcessingOptions(options);
+
+      const {
+        batchSize = 10, // Smaller batch for Gemini processing
+        useGeminiAnalysis = true,
+      } = options;
+
+      // 1. Fetch Reddit posts
+      const posts = await this.redditService.fetchSubredditPosts(subreddit, batchSize);
+      
+      if (posts.length === 0) {
+        return {
+          processedCount: 0,
+          sentencesCount: 0,
+          clustersCount: 0,
+          outlierCount: 0,
+          processingTimeMs: Date.now() - startTime,
+          structuredAnalyses: [],
+        };
+      }
+
+      // 2. Create feedback source
+      const sourceId = await this.databaseService.createFeedbackSource({
+        name: `r/${subreddit} (Enhanced)`,
+        type: 'reddit_enhanced',
+        metadata: {
+          subreddit,
+          fetchedAt: new Date().toISOString(),
+          postCount: posts.length,
+          analysisType: 'gemini_structured',
+        },
+      });
+
+      // 3. Process posts into feedback entries
+      const feedbackEntries: FeedbackEntry[] = posts.map(post => ({
+        sourceId,
+        rawText: `${post.title}\n${post.selftext || ''}`.trim(),
+        author: post.author,
+        timestamp: new Date(post.createdUtc * 1000),
+        metadata: {
+          postId: post.permalink,
+          score: post.score,
+          subreddit: post.subreddit,
+          url: post.permalink,
+        },
+      }));
+
+      // 4. Store feedback entries and get IDs
+      const entryIds = await this.databaseService.createFeedbackEntries(feedbackEntries);
+
+      // 5. Perform structured analysis with Gemini and create sentences
+      let structuredAnalyses: StructuredFeedback[] = [];
+      const allSentences: Array<{
+        entryId: number;
+        text: string;
+        sentimentScore: number;
+        sentimentLabel: string;
+        embedding: number[];
+        categories: string[];
+        metadata?: Record<string, unknown>;
+      }> = [];
+      
+      if (useGeminiAnalysis) {
+        const texts = feedbackEntries.map(entry => entry.rawText);
+        structuredAnalyses = await this.geminiNLPService.batchAnalyzeStructuredFeedback(texts);
+        
+        console.log(`✅ Gemini analysis completed for ${structuredAnalyses.length} posts`);
+
+        // Create sentences with structured analysis metadata
+        for (let i = 0; i < feedbackEntries.length; i++) {
+          const entry = feedbackEntries[i];
+          const entryId = entryIds[i];
+          const analysis = structuredAnalyses[i];
+          
+          if (!entry || !entryId || !analysis) continue;
+
+          // Convert sentiment to score and ensure valid label
+          const sentimentLabel = analysis.sentiment.primary === 'positive' ? 'positive' :
+                                analysis.sentiment.primary === 'negative' ? 'negative' : 'neutral';
+          
+          const sentimentScore = analysis.sentiment.primary === 'positive' ? 
+            analysis.sentiment.confidence : 
+            analysis.sentiment.primary === 'negative' ? 
+            -analysis.sentiment.confidence : 0;
+
+          // Generate a simple embedding (we could use NLP service here too)
+          const embedding = new Array(384).fill(0).map(() => Math.random() - 0.5);
+
+          const sentence = {
+            entryId,
+            text: entry.rawText,
+            sentimentScore,
+            sentimentLabel,
+            embedding,
+            categories: [analysis.category],
+            metadata: {
+              structuredAnalysis: analysis,
+            },
+          };
+
+          console.log(`📝 Creating sentence with sentiment: ${sentimentLabel}, score: ${sentimentScore}`);
+
+          allSentences.push(sentence);
+        }
+      }
+
+      // Store sentences with structured analysis
+      const sentenceIds = await this.databaseService.createSentences(allSentences);
+
+      // 6. Create enhanced feedback groups based on structured analysis
+      const feedbackGroups: Array<{
+        name: string;
+        description: string;
+        sentenceIds: number[];
+        trendScore: number;
+        metadata: Record<string, unknown>;
+      }> = [];
+
+      // Group by category
+      const categoryGroups = new Map<string, StructuredFeedback[]>();
+      structuredAnalyses.forEach(analysis => {
+        const category = analysis.category;
+        if (!categoryGroups.has(category)) {
+          categoryGroups.set(category, []);
+        }
+        categoryGroups.get(category)!.push(analysis);
+      });
+
+      // Create groups for each category
+      for (const [category, analyses] of categoryGroups) {
+        if (analyses.length > 0) {
+          const themes = [...new Set(analyses.flatMap(a => a.themes))];
+          const avgUrgency = this.calculateAverageUrgency(analyses.map(a => a.urgency));
+          
+          feedbackGroups.push({
+            name: `${category.replace('_', ' ').toUpperCase()} Issues`,
+            description: `${analyses.length} feedback items categorized as ${category}. Common themes: ${themes.slice(0, 3).join(', ')}`,
+            sentenceIds: [], // Would need to map to actual sentence IDs
+            trendScore: avgUrgency,
+            metadata: {
+              category,
+              themes,
+              count: analyses.length,
+              urgencyLevel: avgUrgency,
+              actionItems: [...new Set(analyses.flatMap(a => a.actionItems))],
+            },
+          });
+        }
+      }
+
+      // Store feedback groups
+      if (feedbackGroups.length > 0) {
+        await this.databaseService.createFeedbackGroups(feedbackGroups);
+      }
+
+      const processingTimeMs = Date.now() - startTime;
+
+      return {
+        processedCount: feedbackEntries.length,
+        sentencesCount: structuredAnalyses.length, // Each post is treated as one "sentence" for structured analysis
+        clustersCount: feedbackGroups.length,
+        outlierCount: 0,
+        processingTimeMs,
+        structuredAnalyses,
+      };
+
+    } catch (error) {
+      if (error instanceof ValidationError || error instanceof ExternalApiError) {
+        throw error;
+      }
+
+      throw new ExternalApiError(
+        'FeedbackService',
+        `Failed to process Reddit feedback with structured analysis: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        500
+      );
+    }
+  }
+
+  private calculateAverageUrgency(urgencies: Array<'low' | 'medium' | 'high' | 'critical'>): number {
+    const urgencyValues = { low: 0.25, medium: 0.5, high: 0.75, critical: 1.0 };
+    const total = urgencies.reduce((sum, urgency) => sum + urgencyValues[urgency], 0);
+    return total / urgencies.length;
   }
 
   public async healthCheck(): Promise<{

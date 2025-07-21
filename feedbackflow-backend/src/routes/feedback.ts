@@ -143,6 +143,58 @@ router.post('/process/file', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/feedback/process/reddit-enhanced - Process Reddit feedback with Gemini NLP
+router.post('/process/reddit-enhanced', async (req: Request, res: Response) => {
+  try {
+    const { subreddit, options = {} } = req.body;
+
+    if (!subreddit || typeof subreddit !== 'string') {
+      throw new ValidationError('Subreddit is required and must be a string');
+    }
+
+    // Validate options if provided
+    if (options && typeof options !== 'object') {
+      throw new ValidationError('Options must be an object');
+    }
+
+    const result = await feedbackService.processRedditWithStructuredAnalysis(subreddit, options);
+    res.json(createSuccessResponse(result));
+  } catch (error) {
+    handleError(error, res);
+  }
+});
+
+// POST /api/feedback/analyze-structured - Analyze texts with Gemini NLP
+router.post('/analyze-structured', async (req: Request, res: Response) => {
+  try {
+    const { texts } = req.body;
+
+    if (!Array.isArray(texts)) {
+      throw new ValidationError('Texts must be an array');
+    }
+
+    if (texts.length === 0) {
+      throw new ValidationError('Texts array cannot be empty');
+    }
+
+    if (texts.length > 20) {
+      throw new ValidationError('Cannot analyze more than 20 texts at once');
+    }
+
+    // Validate all texts are strings
+    for (let i = 0; i < texts.length; i++) {
+      if (typeof texts[i] !== 'string') {
+        throw new ValidationError(`Text at index ${i} must be a string`);
+      }
+    }
+
+    const result = await feedbackService.analyzeStructuredFeedback(texts);
+    res.json(createSuccessResponse(result));
+  } catch (error) {
+    handleError(error, res);
+  }
+});
+
 // GET /api/feedback/health - Health check endpoint
 router.get('/health', async (req: Request, res: Response) => {
   try {

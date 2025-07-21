@@ -12,6 +12,21 @@ interface FeedbackGroup {
   updatedAt: string;
 }
 
+interface StructuredFeedback {
+  sentiment: {
+    primary: 'positive' | 'negative' | 'neutral';
+    confidence: number;
+    emotions: string[];
+  };
+  category: 'bug_report' | 'feature_request' | 'complaint' | 'praise' | 'question' | 'discussion';
+  themes: string[];
+  urgency: 'low' | 'medium' | 'high' | 'critical';
+  summary: string;
+  suggestedResponse?: string;
+  actionItems: string[];
+  keyPhrases: string[];
+}
+
 interface Sentence {
   id: number;
   entryId: number;
@@ -25,6 +40,7 @@ interface Sentence {
   rawText?: string;
   sourceName?: string;
   sourceType?: string;
+  structuredAnalysis?: StructuredFeedback;
   redditData?: {
     title?: string;
     subreddit?: string;
@@ -136,6 +152,28 @@ export default function DataPage() {
     if (score >= 0.8) return 'text-green-600';
     if (score >= 0.6) return 'text-yellow-600';
     return 'text-red-600';
+  };
+
+  const getCategoryColor = (category: string) => {
+    const colors = {
+      bug_report: 'bg-red-100 text-red-800',
+      feature_request: 'bg-blue-100 text-blue-800',
+      complaint: 'bg-orange-100 text-orange-800',
+      praise: 'bg-green-100 text-green-800',
+      question: 'bg-purple-100 text-purple-800',
+      discussion: 'bg-gray-100 text-gray-800',
+    };
+    return colors[category as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+  };
+
+  const getUrgencyColor = (urgency: string) => {
+    const colors = {
+      low: 'bg-green-100 text-green-800',
+      medium: 'bg-yellow-100 text-yellow-800',
+      high: 'bg-orange-100 text-orange-800',
+      critical: 'bg-red-100 text-red-800',
+    };
+    return colors[urgency as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
   useEffect(() => {
@@ -348,6 +386,98 @@ export default function DataPage() {
                         
                         {/* Sentence Text */}
                         <p className="text-gray-900 mb-3">{sentence.text}</p>
+                        
+                        {/* Enhanced Gemini Analysis (if available) */}
+                        {sentence.structuredAnalysis && (
+                          <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg">
+                            <div className="flex items-center gap-2 mb-3">
+                              <span className="text-sm font-semibold text-blue-900">🤖 Gemini AI Analysis</span>
+                            </div>
+                            
+                            {/* Analysis Badges */}
+                            <div className="flex flex-wrap gap-2 mb-3">
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${getCategoryColor(sentence.structuredAnalysis.category)}`}>
+                                {sentence.structuredAnalysis.category.replace('_', ' ').toUpperCase()}
+                              </span>
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${getUrgencyColor(sentence.structuredAnalysis.urgency)}`}>
+                                {sentence.structuredAnalysis.urgency.toUpperCase()} URGENCY
+                              </span>
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${getSentimentColor(sentence.structuredAnalysis.sentiment.primary)}`}>
+                                {sentence.structuredAnalysis.sentiment.primary.toUpperCase()} ({Math.round(sentence.structuredAnalysis.sentiment.confidence * 100)}%)
+                              </span>
+                            </div>
+
+                            {/* Summary */}
+                            <div className="mb-3">
+                              <h6 className="text-sm font-semibold text-gray-800 mb-1">Summary</h6>
+                              <p className="text-sm text-gray-700">{sentence.structuredAnalysis.summary}</p>
+                            </div>
+
+                            {/* Themes */}
+                            {sentence.structuredAnalysis.themes.length > 0 && (
+                              <div className="mb-3">
+                                <h6 className="text-sm font-semibold text-gray-800 mb-1">Key Themes</h6>
+                                <div className="flex flex-wrap gap-1">
+                                  {sentence.structuredAnalysis.themes.map((theme, index) => (
+                                    <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                                      {theme}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Emotions */}
+                            {sentence.structuredAnalysis.sentiment.emotions.length > 0 && (
+                              <div className="mb-3">
+                                <h6 className="text-sm font-semibold text-gray-800 mb-1">Emotions</h6>
+                                <div className="flex flex-wrap gap-1">
+                                  {sentence.structuredAnalysis.sentiment.emotions.map((emotion, index) => (
+                                    <span key={index} className="px-2 py-1 bg-pink-100 text-pink-800 text-xs rounded">
+                                      {emotion}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Action Items */}
+                            {sentence.structuredAnalysis.actionItems.length > 0 && (
+                              <div className="mb-3">
+                                <h6 className="text-sm font-semibold text-gray-800 mb-1">Action Items</h6>
+                                <ul className="text-sm text-gray-700 list-disc list-inside space-y-1">
+                                  {sentence.structuredAnalysis.actionItems.map((item, index) => (
+                                    <li key={index}>{item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Suggested Response */}
+                            {sentence.structuredAnalysis.suggestedResponse && (
+                              <div className="mb-3">
+                                <h6 className="text-sm font-semibold text-gray-800 mb-1">Suggested Response</h6>
+                                <div className="bg-green-100 border border-green-300 rounded p-2">
+                                  <p className="text-sm text-green-800">{sentence.structuredAnalysis.suggestedResponse}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Key Phrases */}
+                            {sentence.structuredAnalysis.keyPhrases.length > 0 && (
+                              <div>
+                                <h6 className="text-sm font-semibold text-gray-800 mb-1">Key Phrases</h6>
+                                <div className="flex flex-wrap gap-1">
+                                  {sentence.structuredAnalysis.keyPhrases.map((phrase, index) => (
+                                    <span key={index} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded border">
+                                      &quot;{phrase}&quot;
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         
                         {/* Raw Text (Full Reddit Post Content) */}
                         {sentence.rawText && sentence.rawText !== sentence.text && (

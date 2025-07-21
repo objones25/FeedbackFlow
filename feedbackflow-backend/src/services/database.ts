@@ -273,6 +273,7 @@ export class DatabaseService {
     sentimentLabel: string;
     embedding: number[];
     categories: string[];
+    metadata?: Record<string, unknown>;
   }>): Promise<number[]> {
     const ids: number[] = [];
     
@@ -284,6 +285,7 @@ export class DatabaseService {
         sentiment_label: sentence.sentimentLabel,
         categories: sentence.categories, // PostgreSQL array, not JSON
         embedding: sentence.embedding, // PostgreSQL array, not JSON
+        metadata: JSON.stringify(sentence.metadata || {}), // Store structured analysis here
       });
       ids.push(result.id as number);
     }
